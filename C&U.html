@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>C&U Dating - Match & Meet</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: Arial,sans-serif; margin:0; background:#f7f7fa; color:#222; }
+    .container { max-width:400px; margin:40px auto; background:#fff; border-radius:12px; box-shadow:0 2px 16px #0001; padding:32px 24px; }
+    h1 { color:#1976d2; text-align:center; }
+    #profilePic { width:120px; height:120px; border-radius:50%; object-fit:cover; border:3px solid #1976d2; margin:0 auto 16px auto; display:block; }
+    #uploadLabel { display:block; margin:12px 0 8px 0; font-weight:bold; }
+    #matchBtn { width:100%; padding:12px; background:#1976d2; color:#fff; border:none; border-radius:6px; font-size:1.1em; cursor:pointer; margin-top:16px; }
+    #matchBtn:disabled { background:#aaa; }
+    #matchResult { margin-top:24px; text-align:center; }
+    #matchPic { width:90px; height:90px; border-radius:50%; object-fit:cover; border:2px solid #1976d2; margin-bottom:8px; }
+    .google-btn { width:100%; margin-bottom:18px; }
+    #logoutBtn { background:#d32f2f; margin-top:18px; }
+    .alt-login-btn { width:100%; margin-bottom:12px; padding:12px; border:none; border-radius:6px; font-size:1.1em; cursor:pointer; background:#eee; color:#1976d2; }
+    .alt-login-btn:hover { background:#e3e3e3; }
+    #altLoginModal {
+      position:fixed; top:0; left:0; width:100vw; height:100vh;
+      background:rgba(0,0,0,0.25); display:none; align-items:center; justify-content:center; z-index:1000;
+    }
+    #altLoginBox {
+      background:#fff; border-radius:12px; box-shadow:0 2px 16px #0002;
+      padding:32px 24px; min-width:260px; max-width:90vw;
+      display:flex; flex-direction:column; align-items:center;
+    }
+    #altLoginBox input {
+      width:100%; margin:8px 0; padding:10px; border:1px solid #ccc; border-radius:6px;
+      font-size:1em;
+    }
+    #altLoginBox button {
+      margin:12px 0 0 0; padding:10px 0; width:100%; border:none; border-radius:6px;
+      background:#1976d2; color:#fff; font-size:1.1em; cursor:pointer;
+      transition:background 0.2s;
+    }
+    #altLoginBox button:hover { background:#125ea9; }
+    #altLoginError { color:#d32f2f; font-size:0.95em; margin-top:6px; min-height:18px; }
+    #closeAltLogin { background:none; border:none; color:#888; font-size:1.5em; position:absolute; top:12px; right:18px; cursor:pointer; }
+  </style>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+  <div class="container" id="loginBox">
+    <h1>C&amp;U Dating</h1>
+    <div id="g_id_onload"
+         data-client_id="YOUR_GOOGLE_CLIENT_ID"
+         data-context="signin"
+         data-ux_mode="popup"
+         data-callback="onGoogleSignIn"
+         data-auto_prompt="false">
+    </div>
+    <div class="g_id_signin google-btn"
+         data-type="standard"
+         data-shape="pill"
+         data-theme="outline"
+         data-text="continue_with"
+         data-size="large"
+         data-logo_alignment="left">
+    </div>
+    <button class="alt-login-btn" id="emailLoginBtn">Continue with Email</button>
+    <button class="alt-login-btn" id="phoneLoginBtn">Continue with Number</button>
+  </div>
+
+  <!-- Email/Phone Modal -->
+  <div id="altLoginModal">
+    <div id="altLoginBox" style="position:relative;">
+      <button id="closeAltLogin" title="Close">&times;</button>
+      <h2 id="altLoginTitle">Continue</h2>
+      <input type="text" id="altLoginInput" placeholder="">
+      <button id="sendCodeBtn">Send Verification Code</button>
+      <div id="altLoginError"></div>
+      <div id="codeSection" style="display:none;width:100%;">
+        <input type="text" id="codeInput" placeholder="Enter verification code">
+        <button id="verifyCodeBtn">Verify</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="container" id="mainBox" style="display:none;">
+    <h1>Welcome, <span id="userName"></span>!</h1>
+    <img id="profilePic" src="https://via.placeholder.com/120?text=Upload" alt="Profile Picture">
+    <label id="uploadLabel" for="picInput">Upload your picture</label>
+    <input type="file" id="picInput" accept="image/*">
+    <button id="matchBtn" disabled>Find a Match</button>
+    <div id="matchResult"></div>
+    <button id="logoutBtn" style="display:none;">Logout</button>
+  </div>
+
+  <script>
+    // --- Google Login ---
+    let currentUser = null;
+    function onGoogleSignIn(response) {
+      // In production, verify the token on your backend!
+      const data = parseJwt(response.credential);
+      currentUser = {
+        name: data.name,
+        email: data.email,
+        picture: data.picture
+      };
+      document.getElementById('userName').textContent = currentUser.name;
+      document.getElementById('profilePic').src = currentUser.picture || 'https://via.placeholder.com/120?text=Upload';
+      document.getElementById('loginBox').style.display = 'none';
+      document.getElementById('mainBox').style.display = '';
+      document.getElementById('logoutBtn').style.display = '';
+    }
+    function parseJwt(token) {
+      try {
+        return JSON.parse(atob(token.split('.')[1]));
+      } catch (e) { return {}; }
+    }
+    document.getElementById('logoutBtn').onclick = function() {
+      google.accounts.id.disableAutoSelect();
+      currentUser = null;
+      document.getElementById('mainBox').style.display = 'none';
+      document.getElementById('loginBox').style.display = '';
+    };
+
+    // --- Email/Phone Login Modal ---
+    const altLoginModal = document.getElementById('altLoginModal');
+    const altLoginTitle = document.getElementById('altLoginTitle');
+    const altLoginInput = document.getElementById('altLoginInput');
+    const sendCodeBtn = document.getElementById('sendCodeBtn');
+    const altLoginError = document.getElementById('altLoginError');
+    const codeSection = document.getElementById('codeSection');
+    const codeInput = document.getElementById('codeInput');
+    const verifyCodeBtn = document.getElementById('verifyCodeBtn');
+    let currentAltType = null;
+    let sentCode = null;
+
+    document.getElementById('emailLoginBtn').onclick = function() {
+      altLoginTitle.textContent = "Continue with Email";
+      altLoginInput.placeholder = "Enter your email";
+      altLoginInput.type = "email";
+      altLoginInput.value = "";
+      altLoginError.textContent = "";
+      codeSection.style.display = "none";
+      altLoginModal.style.display = "flex";
+      currentAltType = "email";
+    };
+    document.getElementById('phoneLoginBtn').onclick = function() {
+      altLoginTitle.textContent = "Continue with Number";
+      altLoginInput.placeholder = "Enter your phone number";
+      altLoginInput.type = "tel";
+      altLoginInput.value = "";
+      altLoginError.textContent = "";
+      codeSection.style.display = "none";
+      altLoginModal.style.display = "flex";
+      currentAltType = "phone";
+    };
+    document.getElementById('closeAltLogin').onclick = function() {
+      altLoginModal.style.display = "none";
+    };
+
+    sendCodeBtn.onclick = function() {
+      const value = altLoginInput.value.trim();
+      if (currentAltType === "email") {
+        if (!/^[^@]+@[^@]+\.[^@]+$/.test(value)) {
+          altLoginError.textContent = "Enter a valid email address.";
+          return;
+        }
+      } else if (currentAltType === "phone") {
+        if (!/^\+?\d{7,15}$/.test(value)) {
+          altLoginError.textContent = "Enter a valid phone number.";
+          return;
+        }
+      }
+      // Simulate sending code (in production, send via backend)
+      sentCode = Math.floor(100000 + Math.random() * 900000).toString();
+      altLoginError.textContent = "Verification code sent! (Demo: " + sentCode + ")";
+      codeSection.style.display = "block";
+    };
+
+    verifyCodeBtn.onclick = function() {
+      if (codeInput.value.trim() === sentCode) {
+        currentUser = {
+          name: currentAltType === "email" ? altLoginInput.value : "User",
+          email: currentAltType === "email" ? altLoginInput.value : "",
+          picture: ""
+        };
+        document.getElementById('userName').textContent = currentUser.name;
+        document.getElementById('profilePic').src = 'https://via.placeholder.com/120?text=Upload';
+        document.getElementById('loginBox').style.display = 'none';
+        document.getElementById('mainBox').style.display = '';
+        document.getElementById('logoutBtn').style.display = '';
+        altLoginModal.style.display = "none";
+      } else {
+        altLoginError.textContent = "Incorrect verification code.";
+      }
+    };
+
+    // --- Image Upload ---
+    let userPicData = null;
+    document.getElementById('picInput').onchange = function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = function(evt) {
+        document.getElementById('profilePic').src = evt.target.result;
+        userPicData = evt.target.result;
+        document.getElementById('matchBtn').disabled = false;
+      };
+      reader.readAsDataURL(file);
+    };
+
+    // --- Matching (Demo: random user) ---
+    const demoUsers = [
+      {name:"Alex", pic:"https://randomuser.me/api/portraits/men/32.jpg"},
+      {name:"Sam", pic:"https://randomuser.me/api/portraits/women/44.jpg"},
+      {name:"Jordan", pic:"https://randomuser.me/api/portraits/men/65.jpg"},
+      {name:"Taylor", pic:"https://randomuser.me/api/portraits/women/68.jpg"},
+      {name:"Morgan", pic:"https://randomuser.me/api/portraits/men/21.jpg"}
+    ];
+    document.getElementById('matchBtn').onclick = function() {
+      // In production, send user info & pic to backend, get a real match!
+      const match = demoUsers[Math.floor(Math.random()*demoUsers.length)];
+      document.getElementById('matchResult').innerHTML = `
+        <img id="matchPic" src="${match.pic}" alt="Match">
+        <div><b>${match.name}</b> matched with you!</div>
+      `;
+    };
+  </script>
+</body>
